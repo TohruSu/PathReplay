@@ -1,46 +1,35 @@
 # PathReplay
 
-A small, browser-based viewer for comparing and replaying 2D trajectories from local CSV files. React, TypeScript, Vite, and SVG; client-side only.
+**Visualize and replay 2D trajectories from CSV files.**
 
-## Run locally
+PathReplay is a lightweight, browser-based viewer for comparing motion over time. Load a CSV, choose up to two trajectories, and use the timeline to see how their positions change. Everything runs in your browser.
 
-Requires Node.js 22.12 or newer and npm.
+**[Try the live demo](https://tohrusu.github.io/PathReplay/)**
 
-```sh
-npm install
-npm run dev
-```
+## Features
 
-Open the local URL printed by Vite. For a production build:
+- **CSV import:** Open a local file in a generic `time,x,y` format or the native format from [Autonomous Tractor Navigation Simulation](https://github.com/TohruSu/autonomous-tractor-navigation-sim).
+- **Side-by-side comparison:** Select one or two trajectories, with equal X/Y scale and distinct line styles.
+- **Replay controls:** Play at 1× speed, pause, reset, or seek to any point on the timeline.
+- **Built-in demo:** Explore two sample paths immediately, without preparing a file.
 
-```sh
-npm test
-npm run build
-npm run preview
-```
+Data stays in the browser; there is no account or server upload.
 
-`npm test` runs the focused Vitest suite once. `npm run test:watch` starts watch mode. CI installs with `npm ci`, runs the tests, and builds the app. The production files are in `dist/` and can be served by an ordinary static HTTP server.
+## Getting started
 
-## GitHub Pages
+Open the [live application](https://tohrusu.github.io/PathReplay/) and select **Load Demo** or **Import CSV**.
 
-In the GitHub repository, select **Settings > Pages > Build and deployment > Source > GitHub Actions**. The `Deploy GitHub Pages` workflow builds with Node 22 and `npm ci` / `npm run build`, uploads `dist/`, and deploys through the `github-pages` environment on pushes to `main`. To run it manually, choose **Actions > Deploy GitHub Pages > Run workflow** on `main`. The deployment job reports the site URL. Relative assets support a repository subpath such as `/PathReplay/`; no `gh-pages` branch or committed build output is needed. See [GitHub's custom Pages workflow documentation](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages).
+After importing a file, choose the paths you want to compare. Simulator exports are organized by scenario and controller. Select up to two trajectories; deselect one to choose another.
 
-## Use
-
-1. Choose **Load Demo** for an immediate example, or **Import CSV** to open one local file.
-2. For simulator data, select a scenario. Choose one or two trajectories using the checkboxes. Uncheck a selected path before choosing a third.
-3. **Play** follows the timestamps at 1× speed. **Pause** holds the current time; **Reset** returns to the start. Drag the time slider or use its arrow keys to seek. Seeking pauses playback.
-4. Read current coordinates below the plot. Changing a scenario, selection, or dataset resets playback. A failed import keeps the previous dataset available.
-
-Files are read in your browser, with no uploads, telemetry, remote fonts, backend, accounts, or persistent storage. Refreshing the page clears the loaded data.
+Use **Play**, **Pause**, **Reset**, or the time slider to explore movement. Seeking pauses playback, and changing the dataset, scenario, or selection restarts the timeline. An invalid import leaves your previous dataset available.
 
 ## CSV formats
 
-CSV files must be comma-delimited UTF-8 text with a header row. Quoted values, escaped quotes, CRLF/LF line endings, scientific notation, and a UTF-8 BOM are supported. Surrounding whitespace in headers, names, and numeric values is ignored; column names are case-sensitive. Completely empty lines are ignored. Other malformed rows are rejected.
+Files should be comma-delimited UTF-8 CSV with a header row. Quoted fields, escaped quotes, CRLF/LF endings, a UTF-8 BOM, and scientific notation are supported. Headers are case-sensitive; whitespace around headers and values is trimmed.
 
-### Generic
+### Generic trajectories
 
-Required columns: `time,x,y`. Optional: `track`. Additional columns are ignored.
+Required columns: `time,x,y`. Add an optional `track` column to group multiple paths:
 
 ```csv
 time,x,y,track
@@ -50,9 +39,9 @@ time,x,y,track
 1.5,3,4,Path B
 ```
 
-Without `track`, the entire file is one trajectory. With `track`, samples are grouped by the nonempty track name, in their original order. Time values are interpreted as seconds; X/Y units are whatever the CSV uses, with equal scale on both axes.
+Without `track`, the file represents one trajectory. Time is measured in seconds, while X and Y use the units of your data. Rows for different tracks can be interleaved.
 
-### Tractor simulator
+### Tractor simulator exports
 
 Required columns: `scenario,controller,time_s,x_m,y_m`.
 
@@ -62,43 +51,63 @@ turn,Controller A,0,0,0,0,0,2,0,0,0,0
 turn,Controller A,1,0.1,0.2,0.01,0.1,2,0.2,0.1,0.01,0.2
 ```
 
-Use **samples.csv**, not summary.csv, from [Autonomous Tractor Navigation Simulation](https://github.com/TohruSu/autonomous-tractor-navigation-sim). The header is compatible with its [CSV exporter](https://github.com/TohruSu/autonomous-tractor-navigation-sim/blob/main/src/TractorNavigation.Cli/CsvExport.cs). Samples are grouped by the pair `(scenario, controller)`; runs in different scenarios remain separate. Extra exporter columns are ignored. Coordinates are displayed in meters. No reference route is inferred or generated.
+Import the simulator's `samples.csv` file. PathReplay groups rows by `(scenario, controller)`, displays coordinates in meters, and ignores additional exporter columns. See the simulator's [CSV exporter](https://github.com/TohruSu/autonomous-tractor-navigation-sim/blob/main/src/TractorNavigation.Cli/CsvExport.cs) for the native format.
 
-### Validation and limits
+### File limits and validation
 
-- Maximum **5 MiB** (5,242,880 bytes) and **50,000 data rows**, across all trajectories. Parsing happens on the main thread; these limits bound the work and SVG size.
-- Maximum **200 trajectories per file**, including unselected trajectories. Generic files count distinct `track` groups; native files count distinct `(scenario, controller)` pairs across all scenarios. Files over this limit are rejected; export fewer groups.
-- Every trajectory must contain at least two samples, including trajectories not currently selected.
-- All timestamps and coordinates must be finite decimal numbers. Blank values, NaN, Infinity, and hexadecimal values are rejected.
-- Timestamps must be strictly increasing within each trajectory in the input order. Rows may interleave trajectories. No sorting, deduplication, or repair is performed.
-- All rows must have the same number of fields as the header. Duplicate/blank column names and blank scenario/controller/track names are rejected.
-- A time range whose subtraction exceeds the finite numeric range is rejected.
+| Limit | Value |
+| --- | --- |
+| File size | 5 MiB |
+| Data rows | 50,000 across all paths |
+| Trajectories | 200 per file |
+| Visible trajectories | 2 at a time |
 
-Errors identify the relevant field, trajectory, or data row when available. Data-row numbers count parsed nonempty records after the header, not physical lines inside quoted fields.
+Each trajectory needs at least two samples with strictly increasing timestamps. Coordinates and timestamps must be finite numbers. Rows must match the header's field count; column names and trajectory identifiers must be nonempty and unique where applicable. Empty lines are skipped.
 
-## Demo
+Invalid data produces a descriptive error without replacing the current dataset.
 
-[src/demo.csv](src/demo.csv) is a small, deterministic, explicitly **synthetic** example with two paths and different sampling intervals over 12 seconds. It is bundled with the app and downloadable from the format guide on desktop. It contains no vehicle measurements and was not generated by the tractor simulator.
+## Playback and plotting
 
-## Replay behavior
+Playback follows the timestamps in the selected paths and interpolates linearly between samples. Markers remain at their endpoints outside each path's recorded time range. The SVG plot fits the selected trajectories automatically while preserving equal X/Y scale.
 
-The timeline spans the earliest start through the latest end of the selected paths. Playback uses elapsed wall-clock time through `requestAnimationFrame`, with UI updates capped at roughly 30 fps. Position is linearly interpolated between adjacent timestamps using binary search. Before a path starts or after it ends, its marker stays at the corresponding endpoint; it never extrapolates. Playback stops at the timeline end. Pressing Play again starts over. No automatic time synchronization is applied.
+Axis tick precision adapts to the plotted range. When large coordinates are close together, labeled offsets keep the axes readable. Position and time readouts use compact formatting.
 
-The SVG automatically fits the selected paths with padding and preserves equal X/Y scale. Solid teal and dashed violet distinguish the paths. Static path geometry is memoized separately from the changing markers and coordinate readouts.
+The bundled [demo CSV](src/demo.csv) contains two synthetic paths sampled at different intervals over 12 seconds.
 
-Axis label precision follows tick spacing. Close coordinates with a large shared value use an explicitly labeled offset; add that offset to the tick label to recover the coordinate. Position and time readouts retain up to three decimal places below a magnitude of 10¹², including large absolute timestamps. Very large values use up to 15 significant digits in scientific notation; magnitudes below 0.001 use three significant digits.
+## Run locally
 
-## Project layout
+Requires Node.js 22.12 or newer and npm.
 
-- `src/data.ts`: CSV parsing, grouping, limits, and validation (Papa Parse).
-- `src/playback.ts`, `src/usePlayback.ts`: interpolation, timeline, and animation clock.
-- `src/plot.ts`, `src/TrajectoryPlot.tsx`: equal-scale SVG geometry and rendering.
-- `src/App.tsx`, `src/Replay.tsx`, `src/styles.css`: import, selection, responsive interface, and playback controls.
-- `src/*.test.ts`: parser, interpolation, playback clock, and geometry checks (Vitest).
+```sh
+npm ci
+npm run dev
+```
 
-## Known limitations
+Vite prints the local development URL. To run tests and preview a production build:
 
-One file at a time, up to two visible trajectories, linear interpolation, and fixed 1× playback. Units are inferred only for the native tractor schema. The plot fits automatically and has no manual pan/zoom. Large files near the limits can briefly occupy the main thread. Readouts round for readability; changes below their displayed precision may not be visible. All calculations retain JavaScript floating-point precision, so extremely large absolute timestamps can still lose subsecond precision. The timeline is based on elapsed time, so playback may advance while a browser tab is in the background. There are no maps, metrics, exports, time alignment, or saved sessions.
+```sh
+npm test
+npm run build
+npm run preview
+```
+
+`npm run test:watch` starts Vitest in watch mode. The built site is written to `dist/`.
+
+### GitHub Pages
+
+The [live application](https://tohrusu.github.io/PathReplay/) is deployed from `main` using [GitHub Actions](.github/workflows/deploy.yml). To set up Pages in a fork, choose **Settings → Pages → Build and deployment → GitHub Actions**. The workflow builds and deploys `dist/` automatically.
+
+## Project structure
+
+- `src/data.ts` — CSV parsing, grouping, and validation with Papa Parse.
+- `src/playback.ts` and `src/usePlayback.ts` — interpolation and playback timing.
+- `src/plot.ts` and `src/TrajectoryPlot.tsx` — equal-scale SVG plotting.
+- `src/App.tsx`, `src/Replay.tsx`, and `src/styles.css` — application interface and controls.
+- `src/*.test.ts` — automated tests with Vitest.
+
+## Notes
+
+PathReplay supports one file at a time, a fixed 1× playback speed, and automatic plot fitting rather than manual pan or zoom. Very large files can briefly occupy the main thread. Numeric readouts are rounded, and extremely large timestamps remain subject to JavaScript floating-point precision. Playback may continue advancing while the browser tab is in the background.
 
 ## License
 
